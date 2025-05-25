@@ -14,6 +14,9 @@ from matplotlib.colors import ListedColormap
 df = pd.read_csv('diabetes_subset_25k.csv')
 df.columns = df.columns.str.strip()
 
+# Sample smaller dataset for faster processing
+df = df.sample(1000, random_state=42).reset_index(drop=True)
+
 # Target variable
 target_column = 'readmitted'
 X = df.drop(target_column, axis=1)
@@ -36,19 +39,23 @@ knn_pipeline = Pipeline(steps=[
     ('classifier', KNeighborsClassifier())
 ])
 
-# Hyperparameter tuning
+# Reduced hyperparameter grid for faster tuning
 param_grid = {
-    'classifier__n_neighbors': list(range(1, 21)),
-    'classifier__weights': ['uniform', 'distance'],
-    'classifier__metric': ['euclidean', 'manhattan']
+    'classifier__n_neighbors': [3, 5, 7],
+    'classifier__weights': ['uniform'],
+    'classifier__metric': ['euclidean']
 }
 
 # Train/test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# GridSearchCV
-grid_search = GridSearchCV(knn_pipeline, param_grid, cv=5, scoring='accuracy')
+# GridSearchCV with parallel jobs
+grid_search = GridSearchCV(knn_pipeline, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+
+# Fit grid search
+print("Starting Grid Search...")
 grid_search.fit(X_train, y_train)
+print("Grid Search complete!")
 
 print("Best Parameters:", grid_search.best_params_)
 
@@ -96,7 +103,7 @@ plt.axis('equal')
 plt.show()
 
 # 4. Feature Importance Proxy (Variance)
-ohe = grid_search.best_estimator_.named_steps['preprocessor'].named_transformers_['cat']
+ohe = best_model.named_steps['preprocessor'].named_transformers_['cat']
 encoded_cols = ohe.get_feature_names_out(categorical_cols)
 all_feature_names = numerical_cols + list(encoded_cols)
 
@@ -130,8 +137,8 @@ if all(f in numerical_cols for f in features_2d):
 
     x_min, x_max = X_vis_scaled[:, 0].min() - 1, X_vis_scaled[:, 0].max() + 1
     y_min, y_max = X_vis_scaled[:, 1].min() - 1, X_vis_scaled[:, 1].max() + 1
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1),
-                         np.arange(y_min, y_max, 0.1))
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.2),
+                         np.arange(y_min, y_max, 0.2))
 
     Z = knn_vis.predict(np.c_[xx.ravel(), yy.ravel()])
     Z = Z.reshape(xx.shape)
@@ -146,4 +153,3 @@ if all(f in numerical_cols for f in features_2d):
     plt.show()
 else:
     print("Features for decision boundary not found in numerical columns.")
-
